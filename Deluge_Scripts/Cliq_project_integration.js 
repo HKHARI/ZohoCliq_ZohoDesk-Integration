@@ -1,0 +1,63 @@
+
+
+// Use the below given instant button's syntax to see how the function code is invoked! 
+// [What's this?](invoke.function|HandleTicket)
+CLIQ_DB_NAME = "supportticketdetails";
+PROJECT_PORTAL_ID = "796841545";
+PROJECT_ID = "2046081000000050069";
+AUTOMATE_TASK_LIST_ID = "2046081000001342043";
+PROJECT_TASK_VIEW_LINK = "https://projects.zoho.com/portal/sdpela#zp/projects/2046081000000050069/tasks/custom-view/2046081000000342003/list/task-detail/";
+DESK_SEARCH_URL = "https://desk.zoho.com/api/v1/tickets/search?ticketNumber=";
+if(user.get("email") != "************")
+{
+	return {"text":"You are not authorised to procced with this.","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"}};
+}
+record_details = zoho.cliq.getRecordById(CLIQ_DB_NAME,arguments.get("key")).get("object");
+if(target.get("name").contains("Add Task"))
+{
+	if(record_details.get("taskid") != 0)
+	{
+		return {"text":"Refer this - [LINK](" + PROJECT_TASK_VIEW_LINK + record_details.get("taskid") + ")","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"},"card":{"title":"Task already exist","thumbnail":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/Project.png","theme":"prompt"}};
+	}
+	createTaskParamMap = {"name":record_details.get("ticketsubject"),"tasklist_id":AUTOMATE_TASK_LIST_ID,"custom_fields":{"UDF_CHAR13":record_details.get("weburl"),"UDF_CHAR82":"Problem"}};
+	createTaskResponse = zoho.projects.create(PROJECT_PORTAL_ID,PROJECT_ID,"Tasks",createTaskParamMap,"support_ticket_handling");
+	task_data = createTaskResponse.get("tasks").get(0);
+	response_map = zoho.cliq.updateRecord(CLIQ_DB_NAME,record_details.get("id"),{"taskid":task_data.get("id")});
+	return {"text":"# " + task_data.get("key") + " - [LINK](" + PROJECT_TASK_VIEW_LINK + task_data.get("id") + ")\n Update the task status","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"},"card":{"title":"Task Added","thumbnail":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/Project.png","theme":"prompt"}};
+}
+else if(target.get("name").contains("Work Done"))
+{
+	ticket_list = invokeurl
+	[
+		url :DESK_SEARCH_URL + record_details.get("pitstopdisplayid")
+		type :GET
+		headers:{"Accept":"application/json","orgId":"4335217"}
+		connection:"support_ticket_handling"
+	];
+	ticket_data = ticket_list.get("data").get(0);
+	info ticket_data;
+	if(ticket_data.get("statusType") != "Closed")
+	{
+		return {"text":"Ticket is not closed yet. Wait till the ticket is closed","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"}};
+	}
+	warning_data = {};
+	if(ticket_data.get("cf").get("cf_sdp_od_auto_assist_field") == null)
+	{
+		warning_data.add("Auto-Assist is empty");
+	}
+	if(record_details.get("taskid") == 0)
+	{
+		warning_data.add("Task not created in project yet");
+	}
+	info warning_data;
+	if(warning_data.isEmpty())
+	{
+		return {"text":"Are you sure you want to delete the record\n [+:thumbsup: Confirm Delete](invoke.function|HandleTicket|harishkumar.k@zohocorp.com|" + record_details.get("id") + ")","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"}};
+	}
+	return {"text":"Warning, Following are not captured yet","bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"},"card":{"title":"Delete Record","theme":"modern-inline"},"slides":{{"type":"list","title":"","buttons":{{"label":"Confirm Delete","hint":"","type":"-","action":{"type":"invoke.function","data":{"name":"HandleTicket"}},"key":record_details.get("id")}},"data":warning_data}}};
+}
+else if(target.get("name").contains("Confirm Delete"))
+{
+	return {"text":"Record removed successfully." + record_details.get("id"),"bot":{"name":"Knight Owl","image":"https://raw.githubusercontent.com/HKHARI/ThamizhKural/main/owl_bot.png"}};
+}
+return Map();
